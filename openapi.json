@@ -1,0 +1,415 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Dropbox Core API (Practical Subset)",
+    "version": "1.0.0",
+    "description": "A concise, production-oriented subset of Dropbox v2 HTTP API for common automation flows (list, search, metadata, upload, download, share, copy/move/delete). Uses OAuth 2.0 Bearer tokens.\n\nSecurity: store tokens securely; avoid logging file paths or IDs that could be sensitive."
+  },
+  "servers": [
+    {
+      "url": "https://api.dropboxapi.com/2",
+      "description": "JSON-RPC style endpoints"
+    }
+  ],
+  "tags": [
+    { "name": "Users" },
+    { "name": "Files" },
+    { "name": "Sharing" }
+  ],
+  "security": [
+    { "OAuth2": [] }
+  ],
+  "paths": {
+    "/users/get_current_account": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Get current account",
+        "operationId": "getCurrentAccount",
+        "responses": {
+          "200": {
+            "description": "Account info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "account_id": { "type": "string" },
+                    "name": {
+                      "type": "object",
+                      "properties": {
+                        "display_name": { "type": "string" }
+                      }
+                    },
+                    "email": { "type": "string", "format": "email" },
+                    "country": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/files/list_folder": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "List folder",
+        "operationId": "listFolder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                  "path": { "type": "string", "description": "Folder path or ID. Empty string for root." },
+                  "recursive": { "type": "boolean", "default": false },
+                  "include_deleted": { "type": "boolean", "default": false },
+                  "limit": { "type": "integer", "minimum": 1, "maximum": 2000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Folder listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Metadata" }
+                    },
+                    "cursor": { "type": "string" },
+                    "has_more": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/files/list_folder/continue": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "List folder (continue)",
+        "operationId": "listFolderContinue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cursor"],
+                "properties": { "cursor": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Next page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": { "type": "array", "items": { "$ref": "#/components/schemas/Metadata" } },
+                    "cursor": { "type": "string" },
+                    "has_more": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/files/get_metadata": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Get file/folder metadata",
+        "operationId": "getMetadata",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                  "path": { "type": "string" },
+                  "include_media_info": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Metadata" } } }
+          },
+          "409": { "description": "Path not found" }
+        }
+      }
+    },
+
+    "/files/search_v2": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Search files/folders",
+        "operationId": "searchV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                  "query": { "type": "string" },
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "path": { "type": "string" },
+                      "max_results": { "type": "integer", "default": 25 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "has_more": { "type": "boolean" },
+                    "matches": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "metadata": { "$ref": "#/components/schemas/Metadata" }
+                        }
+                      }
+                    },
+                    "cursor": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/files/delete_v2": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Delete file or folder",
+        "operationId": "deleteV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string" } } } }
+          }
+        },
+        "responses": {
+          "200": { "description": "Deleted", "content": { "application/json": { "schema": { "type": "object" } } } }
+        }
+      }
+    },
+
+    "/files/move_v2": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Move file/folder",
+        "operationId": "moveV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object", "required": ["from_path", "to_path"], "properties": { "from_path": { "type": "string" }, "to_path": { "type": "string" } } } }
+          }
+        },
+        "responses": {
+          "200": { "description": "Moved", "content": { "application/json": { "schema": { "type": "object" } } } }
+        }
+      }
+    },
+
+    "/files/copy_v2": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Copy file/folder",
+        "operationId": "copyV2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object", "required": ["from_path", "to_path"], "properties": { "from_path": { "type": "string" }, "to_path": { "type": "string" } } } }
+          }
+        },
+        "responses": {
+          "200": { "description": "Copied", "content": { "application/json": { "schema": { "type": "object" } } } }
+        }
+      }
+    },
+
+    "/sharing/create_shared_link_with_settings": {
+      "post": {
+        "tags": ["Sharing"],
+        "summary": "Create shared link",
+        "operationId": "createSharedLinkWithSettings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                  "path": { "type": "string" },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "requested_visibility": { "type": "string", "enum": ["public", "team_only", "password"] },
+                      "expires": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Shared link info",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string", "format": "uri" } } } } }
+          }
+        }
+      }
+    },
+
+    "/files/download": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Download file (content domain)",
+        "operationId": "download",
+        "servers": [{ "url": "https://content.dropboxapi.com/2", "description": "Content endpoints" }],
+        "parameters": [
+          {
+            "name": "Dropbox-API-Arg",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "JSON string: {\"path\":\"/path/or/id\"}"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File stream",
+            "headers": {
+              "Dropbox-API-Result": { "schema": { "type": "string" }, "description": "JSON metadata string" }
+            },
+            "content": {
+              "application/octet-stream": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "409": { "description": "Path not found" }
+        }
+      }
+    },
+
+    "/files/upload": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Upload file (content domain)",
+        "operationId": "upload",
+        "servers": [{ "url": "https://content.dropboxapi.com/2", "description": "Content endpoints" }],
+        "parameters": [
+          {
+            "name": "Dropbox-API-Arg",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "JSON string: {\"path\":\"/dest/file.txt\",\"mode\":\"add|overwrite|update\",\"autorename\":true}"
+            }
+          },
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "example": "application/octet-stream" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": { "schema": { "type": "string", "format": "binary" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload result",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FileMetadata" } } }
+          }
+        }
+      }
+    }
+  },
+
+  "components": {
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "OAuth2"
+      }
+    },
+    "schemas": {
+      "Metadata": {
+        "type": "object",
+        "description": "Union type: file or folder",
+        "properties": {
+          ".tag": { "type": "string", "enum": ["file", "folder", "deleted"] },
+          "name": { "type": "string" },
+          "path_lower": { "type": "string" },
+          "path_display": { "type": "string" },
+          "id": { "type": "string" }
+        }
+      },
+      "FileMetadata": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Metadata" },
+          {
+            "type": "object",
+            "properties": {
+              ".tag": { "type": "string", "enum": ["file"] },
+              "client_modified": { "type": "string", "format": "date-time" },
+              "server_modified": { "type": "string", "format": "date-time" },
+              "rev": { "type": "string" },
+              "size": { "type": "integer" },
+              "content_hash": { "type": "string" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
